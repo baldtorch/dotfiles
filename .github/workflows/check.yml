@@ -1,0 +1,23 @@
+# CI evaluates the entire module graph with fake mounts; it never activates a system.
+name: Check configuration
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: cachix/install-nix-action@b85815f71a6de0ddee80b8a80a98d43f4bcc66c7 # v31
+      - name: Check Nix formatting
+        run: nix develop -c bash -c 'git ls-files "*.nix" -z | xargs -0 nixfmt --check'
+      - name: Evaluate full system without real disk UUIDs
+        run: nix build .#checks.x86_64-linux.system-evaluation --no-link
+      - name: Test real wallpaper generation and failure safety
+        run: nix build .#checks.x86_64-linux.theme --no-link -L
+      - name: Validate generated configuration with pinned Hyprland
+        run: nix build .#checks.x86_64-linux.hyprland --no-link -L
+      - name: Check Lua syntax
+        run: nix develop -c bash -c 'git ls-files "*.lua" -z | xargs -0 -n1 luac -p'

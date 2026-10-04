@@ -1,0 +1,205 @@
+# NixOS · Hyprland · Limine
+
+A commented, flake-pinned desktop for an Intel i7-12700F, 16 GB RAM and AMD RX 6600 XT.
+Home Manager controls the user configuration. Windows/Super uses Omarchy's essential
+window controls. Waybar sits at the top; Rofi launches apps; wallpaper colors drive the rice.
+
+**Start with [installation](docs/installation.md).** The repository deliberately ships
+without real disk UUIDs. `workstation` refuses to build until you generate its hardware
+configuration and set `hardwareReady = true`. The `check` host is for validation only.
+Do not install `check` or wipe Arch before completing the pre-install checks and backups.
+
+## Included
+
+- Hyprland on AMDGPU/Mesa, native Wayland Foot terminal, Rofi, top Waybar, Mako,
+  Hyprlock/Hypridle, screen-sharing portals, polkit agent, file manager and screenshots.
+- Limine with up to ten boot-menu generations; PipeWire; NetworkManager; Bluetooth;
+  Intel microcode; 8 GB maximum zram; bounded Nix build concurrency.
+- JetBrainsMono Nerd Font across configurable UI, with Noto/emoji fallbacks.
+- Firefox, Emacs, Neovim, Microsoft VS Code, Codex CLI, cliamp, vm-curator and QEMU/KVM.
+- Steam, Proton-GE, GameMode and MangoHud; 32-bit graphics/audio for games.
+- Java, GCC/G++, Clang tooling, Go, Rust/Cargo, Node.js and Bun, plus per-project shells.
+- ROCm discovery/HIP tools. **RX 6600 XT (`gfx1032`) is not a guaranteed supported ROCm
+  compute target.** Desktop acceleration and gaming do not depend on ROCm. See
+  [gaming and compute](docs/gaming-rocm.md).
+
+## Navigation
+
+```text
+.
+├── flake.nix                    # Inputs, hosts, checks, packages, development shells
+├── flake.lock                   # Exact revisions and hashes; commit this file
+├── hosts/workstation/
+│   ├── default.nix              # System imports and installation guard
+│   ├── settings.nix             # Username, timezone, feature switches, font
+│   ├── hardware-configuration.nix # Replace with installer-generated hardware
+│   └── storage.nix              # Your deliberate mount customizations
+├── modules/nixos/               # System-wide settings, one topic per file
+│   ├── base.nix                 # Nix settings, locale and stateVersion
+│   ├── boot.nix                 # Limine, Intel microcode and KVM module
+│   ├── users.nix                # Account and device-access groups
+│   ├── networking.nix           # NetworkManager/firewall
+│   ├── audio.nix                # PipeWire and Bluetooth
+│   ├── graphics-amd.nix         # AMDGPU, Mesa, Vulkan and 32-bit graphics
+│   ├── rocm.nix                 # Optional compute tools
+│   ├── desktop.nix              # Login, UWSM, portals and polkit
+│   ├── fonts.nix                # System font defaults
+│   ├── gaming.nix               # Steam/Proton/GameMode
+│   ├── keyboard.nix             # QMK/VIA permissions and diagnostics
+│   ├── virtualization.nix       # QEMU
+│   └── performance.nix          # Zram and bounded journal size
+├── home/
+│   ├── default.nix              # Home Manager imports
+│   ├── packages.nix             # Applications and everyday language tools
+│   ├── shell.nix                # Bash, Git, direnv, prompt
+│   ├── theme.nix                # Fonts, GTK/Qt, palette/wallpaper services
+│   ├── desktop/                 # Hyprland, bindings, monitor, bar, Rofi, lock
+│   │   ├── hyprland.{nix,lua}   # Nix integration and readable compositor settings
+│   │   ├── keybindings.{nix,lua} # Native equivalents of essential Omarchy controls
+│   │   ├── monitors.nix         # HDMI-A-1 1080p/60 plus automatic extra monitors
+│   │   ├── waybar.nix           # Top bar modules and CSS
+│   │   ├── launcher.nix         # Rofi
+│   │   ├── notifications.nix    # Mako
+│   │   └── lock-idle.nix        # Lock at 10 min, displays off at 15 min
+│   └── apps/                    # One Nix file per application
+│       ├── emacs/init.el        # Commented Emacs settings
+│       └── nvim/init.lua        # Commented Neovim settings and native LSP
+├── devshells/                   # default, java, c-cpp, go, rust, javascript
+├── packages/default.nix        # Build and test the local rice-theme command
+├── scripts/
+│   ├── rice-theme.py            # Atomic wallpaper/palette generation
+│   └── make-wallpaper.py        # Reproduce the bundled original wallpaper
+├── assets/
+│   ├── default-wallpaper.png    # Original geometric wallpaper; no external download
+│   └── palette.json.template    # Matugen color names used by the renderer
+├── tests/
+│   ├── hardware.nix            # Fake mounts for evaluation; NEVER install this host
+│   ├── test_theme.py            # Real color generation and failure safety
+│   └── hyprland.nix             # Pinned compositor parses generated Lua/colors
+├── docs/                       # Guides linked below
+└── .github/workflows/check.yml  # Formatting, evaluation, theme tests and Lua syntax
+```
+
+All authored configuration/code has explanatory comments. JSON cannot contain comments:
+`flake.lock` is generated by Nix, `palette.json.template` maps Matugen's named colors into
+our renderer, and runtime `settings.json` comes from `home/theme.nix`. Binary wallpaper
+contents are explained by `scripts/make-wallpaper.py`.
+
+## First checks, before installation
+
+On an x86_64 Linux system with Nix and flakes enabled, from this checkout:
+
+```bash
+nix develop -c bash -c 'git ls-files "*.nix" -z | xargs -0 nixfmt --check'
+nix build .#checks.x86_64-linux.system-evaluation --no-link
+nix build .#checks.x86_64-linux.theme --no-link -L
+nix build .#checks.x86_64-linux.hyprland --no-link -L
+# Optional large build: compile/download the whole system, without activating it.
+nix build .#nixosConfigurations.check.config.system.build.toplevel --no-link
+```
+
+`nix flake check` includes the real `workstation` output and intentionally fails until
+hardware is configured. After generating real hardware and changing `hardwareReady`, run
+`nix flake check` and `nixos-rebuild build --flake .#workstation`.
+See [testing](docs/testing.md) for runtime checks and the validation record.
+
+## Essential commands
+
+Run repository commands from `/etc/nixos` or your chosen checkout. The host after `#`
+is the flake output name, even if you change the machine's hostname.
+
+| Command | Purpose |
+|---|---|
+| `nix fmt` | Format Nix configuration |
+| `nix flake check` | Evaluate outputs and run declared checks; requires real hardware config |
+| `nixos-rebuild build --flake .#workstation` | Build without activation |
+| `sudo nixos-rebuild dry-activate --flake .#workstation` | Report activation changes |
+| `sudo nixos-rebuild test --flake .#workstation` | Activate now without selecting it for next boot |
+| `sudo nixos-rebuild switch --flake .#workstation` | Activate now and select it for next boot |
+| `sudo nixos-rebuild boot --flake .#workstation` | Select it for next boot without activating now |
+| `nix flake update` | Update all locked inputs; review, build, test, then commit |
+| `nix flake update nixpkgs home-manager` | Update these inputs together |
+| `sudo nixos-rebuild switch --rollback` | Activate the previous system generation |
+| `sudo nix-env -p /nix/var/nix/profiles/system --list-generations` | List system generations |
+| `nix search nixpkgs ripgrep` | Find a package in the registry's Nixpkgs |
+| `nix shell nixpkgs#ripgrep` | Temporarily use a package; registry revision may differ from this flake |
+| `nix develop .#rust` | Enter this repository's pinned Rust environment |
+| `nix develop .#c-cpp` | Enter the C/C++ environment |
+| `nix store diff-closures /run/current-system ./result` | Compare the running system with a build |
+| `sudo nix-collect-garbage --delete-older-than 30d` | Delete eligible old root generations and unreferenced store paths |
+
+To add a package, edit `home/packages.nix`; to remove it, delete its declaration and
+rebuild. To remove a whole feature, use `hosts/workstation/settings.nix` or remove its
+import and references. Installed applications' personal data is retained.
+
+Home Manager owns generated dotfiles. Back up pre-existing files before the first
+activation; do not force-delete your entire `~/.config`. Removed declarations can leave
+ordinary application data behind; see [maintenance](docs/maintenance.md).
+
+## Omarchy essentials
+
+`Super` = the Windows key. No key remap is needed; put the R75 in Windows mode and disable
+its Windows-key lock if necessary.
+
+| Shortcut | Action |
+|---|---|
+| Super + W / T / J / P | Close / float / toggle split / pseudo tile |
+| Super + F / Super + Alt + F | Fullscreen / maximize within work area |
+| Super + arrows | Focus adjacent window |
+| Super + Shift + arrows | Swap windows |
+| Super + 1…0 | Workspaces 1…10 |
+| Super + Shift + 1…0 | Move window and follow |
+| Super + Shift + Alt + 1…0 | Move window without following |
+| Super + Tab / Shift + Tab / Ctrl + Tab | Next / previous / former workspace |
+| Super + S / Super + Alt + S | Show scratchpad / send window there |
+| Alt + Tab / Alt + Shift + Tab | Next / previous window |
+| Ctrl + Alt + Tab (+ Shift for reverse) | Change focused monitor |
+| Super + Shift + Alt + arrows | Move workspace to another monitor |
+| Super + drag left/right mouse | Move / resize window |
+| Super + minus/equal (+ Shift vertically) | Resize window |
+| Super + mouse wheel | Cycle workspaces |
+| Super + Enter / Super + Shift + Enter | Terminal / Firefox |
+| Super + Shift + F | File manager |
+| Super + Space | Rofi applications |
+| Super + Ctrl + Space | Wallpaper picker |
+| Super + Shift + Space | Toggle the top bar |
+| Super + Escape | Lock screen |
+| Print | Select screenshot region and copy to clipboard |
+| Volume knob / media keys | Volume, mute, media controls |
+
+Grouping, close-all, Omarchy menus, web-app shortcuts and its custom window scripts are
+omitted. Super+Space and Super+Escape are adapted to this desktop's launcher and locker.
+
+## Wallpaper colors
+
+```bash
+mkdir -p ~/Pictures/Wallpapers
+rice-theme apply ~/Pictures/Wallpapers/my-wallpaper.jpg
+rice-theme choose
+rice-theme refresh
+```
+
+Waybar, Rofi, Mako, Hyprland borders, Foot, GTK and Qt use generated colors. Neovim refreshes
+on focus; Emacs provides `M-x rice-refresh-theme`. Open new terminal windows and restart
+GTK/Qt apps that cache their palette. Firefox's UI follows supported GTK styling; websites,
+Steam and VS Code may keep their own themes. VS Code uses a consistent dark theme and the
+requested font rather than having its Nix-managed settings overwritten at runtime.
+
+Palette generation only runs at login or wallpaper change. Static swaybg avoids a wallpaper
+animation loop. Generated files live in `~/.local/state/rice/`, and three palette generations
+are retained. Wallpaper state is separate from NixOS generations; preserve it in backups.
+
+## Guides
+
+- [Minimal ISO installation and GitHub workflow](docs/installation.md)
+- [Customization and project environments](docs/customization.md)
+- [Updates, removal, generations and cleanup](docs/maintenance.md)
+- [Rollback and live USB recovery](docs/recovery.md)
+- [Tests and first-boot verification](docs/testing.md)
+- [Royal Kludge R75 and volume knob](docs/keyboard-r75.md)
+- [Steam, Proton, AMD graphics and ROCm](docs/gaming-rocm.md)
+
+A Git revision plus `flake.lock` reproduces the declared configuration and pinned inputs.
+It does not back up documents, credentials, Steam downloads, VM images or application
+state, and still requires available source downloads/binary caches. Never commit tokens,
+passwords, SSH private keys, Codex authentication or other secrets.

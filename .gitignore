@@ -1,0 +1,13 @@
+# Generated results, caches and private data never belong in the public repository.
+result
+result-*
+.direnv/
+__pycache__/
+*.pyc
+.env
+.env.*
+secrets/
+*.key
+auth.json
+*.qcow2
+*.iso
